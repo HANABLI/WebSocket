@@ -282,11 +282,48 @@ TEST(WebSocketTests, WebSocketTests_ReceiveBinary__Test) {
 }
 
 TEST(WebSocketTests, WebSocketTests_SendMasked__Test) {
-    //TODO 
+    WebSocket::WebSocket ws;
+    const auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Client);
+    const std::string data = "Hello, World!";
+    ws.SendText(data);
+    ASSERT_EQ(19, connection->webSocketOutput.length());
+    ASSERT_EQ("\x81\x8D", connection->webSocketOutput.substr(0, 2));
+    for (size_t i = 0; i < 13; ++i) {
+        ASSERT_EQ(
+            data[i] ^ connection->webSocketOutput[2 + (i % 4)],
+            connection->webSocketOutput[6 + i]
+        );
+    } 
 }
 
 TEST(WebSocketTests, WebSocketTests_ReceiveMasked__Test) {
-    //TODO 
+        WebSocket::WebSocket ws;
+    auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Server);
+    std::vector< std::string > text;
+    ws.SetTextDelegate(
+        [&text](
+            const std::string& data
+        ){
+            text.push_back(data);
+        }
+    );
+    const char maskingKey[4] = {0x12, 0X13, 0X14, 0X17};
+    const std::string data = "Hello, world!";
+    std::string frame = "\x81\x8D";
+    frame += std::string(maskingKey, 4);
+    for (size_t i = 0; i < data.length(); ++i) {
+        frame += data[i] ^ maskingKey[i % 4];
+    }
+    connection->dataReceivedDelegate({frame.begin(), frame.end()});
+    ASSERT_FALSE(connection->brokenByWebSocket);
+    ASSERT_EQ(
+        (std::vector< std::string >{
+            data
+        }),
+        text 
+    ); 
 }
 
 TEST(WebSocketTests, WebSocketTests_SendFragmented__Test) {
