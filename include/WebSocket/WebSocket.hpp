@@ -48,7 +48,6 @@ namespace WebSocket {
         /* data */
 
         // LifeCycle managment
-    public:
         ~WebSocket();
         WebSocket(const WebSocket&) = delete;
         WebSocket(WebSocket&&) = delete;
@@ -108,7 +107,38 @@ namespace WebSocket {
          *      is received from the websocket.
          */
         void SetPongDelegate(MessageReceivedDelegate pongDelegate);
-
+        /**
+         * This method sets the function to call whanever a text message
+         * is received from the websocket
+         * 
+         * @param[in] textDelegate
+         *      This is the function to call whenever a text message
+         *      is received from the websocket.
+         */
+        void SetTextDelegate(MessageReceivedDelegate textDelegate);
+        /**
+         * This method sets the function to call whanever a text message
+         * is received from the websocket
+         * 
+         * @param[in] textDelegate
+         *      This is the function to call whenever a text message
+         *      is received from the websocket.
+         */
+        void SetBinaryDelegate(MessageReceivedDelegate binaryDelegate);
+        /**
+         * This method send a text message over the webSocket.
+         * 
+         * @param[in] text
+         *      This is the text message to send over the webSocket
+         */
+        void SendText(const std::string& text);
+        /**
+         * This method send a binary message over the webSocket.
+         * 
+         * @param[in] binary
+         *      This is the binary message to send over the webSocket
+         */
+        void SendBinary(const std::string& binary);
     private:
         /**
          * 

@@ -99,11 +99,11 @@ namespace {
 }
 
 TEST(WebSocketTests, WebSocketTests_InitiateOpen__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_CompleteOpen__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_SendPingNormaly__Test) {
@@ -218,42 +218,90 @@ TEST(WebSocketTests, WebSocketTests_ReceivePong__Test) {
 }
 
 TEST(WebSoketTests, WebSoketTests_SendText__Test) {
-
+    WebSocket::WebSocket ws;
+    const auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Server);
+    ws.SendText("Hello, World!");
+    ASSERT_FALSE(connection->brokenByWebSocket);
+    ASSERT_EQ("\x81\x0DHello, World!", connection->webSocketOutput); 
 }
 
 TEST(WebSocketTests, WebSocketTests_ReceiveText__Test) {
-
+    WebSocket::WebSocket ws;
+    auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Client);
+    std::vector< std::string > text;
+    ws.SetTextDelegate(
+        [&text](
+            const std::string& data
+        ){
+            text.push_back(data);
+        }
+    );
+    const std::string frame = "\x81\x0DHello, World!";
+    connection->dataReceivedDelegate({frame.begin(), frame.end()});
+    ASSERT_FALSE(connection->brokenByWebSocket);
+    ASSERT_EQ(
+        (std::vector< std::string >{
+            "Hello, World!"
+        }),
+        text
+    );
 }
 
 TEST(WebSoketTests, WebSoketTests_SendBinary__Test) {
-
+    WebSocket::WebSocket ws;
+    const auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Server);
+    ws.SendBinary("Hello, World!");
+    ASSERT_FALSE(connection->brokenByWebSocket);
+    ASSERT_EQ("\x82\x0DHello, World!", connection->webSocketOutput); 
 }
 
 TEST(WebSocketTests, WebSocketTests_ReceiveBinary__Test) {
-
+    WebSocket::WebSocket ws;
+    auto connection = std::make_shared< MockConnection >();
+    ws.Open(connection, WebSocket::WebSocket::Role::Client);
+    std::vector< std::string > binary;
+    ws.SetBinaryDelegate(
+        [&binary](
+            const std::string& data
+        ){
+            binary.push_back(data);
+        }
+    );
+    const std::string frame = "\x82\x0DHello, World!";
+    connection->dataReceivedDelegate({frame.begin(), frame.end()});
+    ASSERT_FALSE(connection->brokenByWebSocket);
+    ASSERT_EQ(
+        (std::vector< std::string >{
+            "Hello, World!"
+        }),
+        binary
+    );
 }
 
 TEST(WebSocketTests, WebSocketTests_SendMasked__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_ReceiveMasked__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_SendFragmented__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_ReceiveFragmented__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_InitiateClose__Test) {
-
+    //TODO 
 }
 
 TEST(WebSocketTests, WebSocketTests_CompleteClose__Test) {
-
+    //TODO 
 }
 
