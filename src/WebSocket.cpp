@@ -52,6 +52,12 @@ namespace {
      * This is the opcod for a continuation frame
      */
     constexpr uint8_t OPCODE_CONTINUATION = 0X00;
+
+    /**
+     * This is the opcod for a close frame
+     */
+    constexpr uint8_t OPCODE_CLOSE = 0X08;
+
     /**
      * This is used to track what kind of message is being sent or 
      * received in fragments.
@@ -84,6 +90,18 @@ namespace WebSocket {
         std::shared_ptr< Http::Connection > connection;
 
         /**
+         * This flag indicates whether or not the WebSocket has sent a close frame,
+         * and is waiting for a one to be received back before closing the WebSocket.
+         */
+        bool closeWebSocketSent = false;
+
+        /**
+         * This flag indicates whether or not the WebSocket has receive a close frame.
+         * and is waiting for the user to finish and signal a close, in order to close 
+         * the webSocket.
+         */
+        bool closeWebSocketReceived = false;
+        /**
          * This is the role throughout the webSocket in the connection.
          */
         WebSocket::Role role;
@@ -113,7 +131,11 @@ namespace WebSocket {
         MessageReceivedDelegate binaryDelegate;
 
         /**
-         * This is the 
+         * This is the function to call whenever a binary message
+         * is received from the websocket.
+         */
+        CloseReceivedDelegate closeReceivedDelegate;
+
         /**
          * This flag indicates whether or not the webSocket is in the midst
          * of sending a fragmented message.
@@ -231,6 +253,26 @@ namespace WebSocket {
                 case OPCODE_PONG: {
                     if (pongDelegate != nullptr) {
                         pongDelegate(data);
+                    }
+                } break;
+
+                case OPCODE_CLOSE: {
+                    unsigned int statusCode = 1005;
+                    std::string reason;
+                    if (data.length() >= 2)  {
+                        statusCode = (
+                            (((unsigned int)data[0] << 8) & 0xFF00)
+                            + ((unsigned int)data[1] & 0x00FF)
+                        );
+                        reason = data.substr(2);
+                    }
+                    const auto closeWasSent = closeWebSocketSent;
+                    closeWebSocketReceived = true;
+                    if (closeReceivedDelegate != nullptr) {
+                        closeReceivedDelegate(statusCode, reason);
+                    }
+                    if (closeWasSent) {
+                        connection->Break(false);
                     }
                 } break;
 
@@ -385,8 +427,35 @@ namespace WebSocket {
             }
         );
     }
+
+    void WebSocket::Close(
+        unsigned int statusCode,
+        const std::string& reason
+    ) {
+        if (impl_->closeWebSocketSent) {
+            return;
+        }
+        impl_->closeWebSocketSent = true;
+        if (statusCode == 1006) {
+            impl_->connection->Break(false);
+        } else {
+            std::string data;
+            if (statusCode != 1005) {
+                data.push_back((uint8_t)(statusCode >> 8));
+                data.push_back((uint8_t)(statusCode & 0xFF));
+                data += reason;
+            }
+            impl_->SendFrame(true, OPCODE_CLOSE, data);
+            if (impl_->closeWebSocketReceived) {
+                impl_->connection->Break(true);
+            }
+        }
+    }
     
     void WebSocket::Ping(const std::string& data) {
+        if (impl_->closeWebSocketSent) {
+            return;
+        }
         if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH) {
             return;
         }
@@ -394,6 +463,9 @@ namespace WebSocket {
     }
 
     void WebSocket::Pong(const std::string& data) {
+        if (impl_->closeWebSocketSent) {
+            return;
+        }
         if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH) {
             return;
         }
@@ -401,6 +473,9 @@ namespace WebSocket {
     }
 
     void WebSocket::SendText(const std::string& text, bool lastFragment) {
+        if (impl_->closeWebSocketSent) {
+            return;
+        }
         if (impl_->sending == FragmentedMessageType::Binary) {
             return;
         }
@@ -418,6 +493,9 @@ namespace WebSocket {
     }
 
     void WebSocket::SendBinary(const std::string& binary, bool lastFragment) {
+        if (impl_->closeWebSocketSent) {
+            return;
+        }
         if (impl_->sending == FragmentedMessageType::Text) {
             return;
         }
@@ -448,6 +526,10 @@ namespace WebSocket {
 
     void WebSocket::SetBinaryDelegate(MessageReceivedDelegate binaryDelegate) {
         impl_->binaryDelegate = binaryDelegate;
+    }
+
+    void WebSocket::SetCloseDelegate(CloseReceivedDelegate closeReceivedDelegate) {
+        impl_->closeReceivedDelegate = closeReceivedDelegate;
     }
 
 }

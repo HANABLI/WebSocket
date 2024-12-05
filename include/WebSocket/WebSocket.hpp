@@ -44,6 +44,17 @@ namespace WebSocket {
          */
         typedef std::function< void(const std::string& data) > MessageReceivedDelegate;
 
+        /**
+         * This is the type of function used to notify a peer that a close message received
+         * by another peer over the WebSocket or due to an error.
+         * 
+         * @param[in] codeReceived
+         *      This is the status code received with the close message.
+         * @param[in] reason
+         *      This is the reason phrase received with the close message.
+         */
+        typedef std::function< void(unsigned int codeReceived, const std::string& reason) > CloseReceivedDelegate;
+
     public:
         /* data */
 
@@ -73,6 +84,19 @@ namespace WebSocket {
         void Open(
             std::shared_ptr< Http::Connection > connection,
             Role role
+        );
+        /**
+         * This method initiates the closing of the WebSocket,
+         * sending a close frame with the given status code and reason.
+         * 
+         * @param[in] statusCode
+         *      This is the status code to send in the close frame.
+         * @param[in] reason
+         *      This is the reason message to send in the close frame.
+         */
+        void Close(
+            unsigned int statusCode = 1005,
+            const std::string& reason = ""
         );
         /**
          * This method sends a ping message over the WebSocket.
@@ -126,7 +150,14 @@ namespace WebSocket {
          */
         void SetBinaryDelegate(MessageReceivedDelegate binaryDelegate);
         /**
-         * This method send a text message over the webSocket.
+         * This method sets the function to call whenever a close message
+         * is received from the webSocket.
+         * 
+         * @param[in] closeReceivedDelegate
+         *      This is the finction to call whenever a close message
+         *      is received from the webSocket.
+         */
+        void SetCloseDelegate(CloseReceivedDelegate closeReceivedDelegate);
         /**
          * This method sends a text message, or fragment thereof,
          * over the webSocket.
