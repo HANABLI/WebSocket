@@ -47,6 +47,29 @@ namespace {
      * This is the opcode for a binary frame.
      */
     constexpr uint8_t OPCODE_BINARY = 0x02;
+
+    /**
+     * This is the opcod for a continuation frame
+     */
+    constexpr uint8_t OPCODE_CONTINUATION = 0X00;
+    /**
+     * This is used to track what kind of message is being sent or 
+     * received in fragments.
+     */
+    enum class FragmentedMessageType {
+        /**
+         * sendig/receiving any message.
+         */
+        None,
+        /**
+         * sending/receiving text message.
+         */
+        Text,
+        /**
+         * sending/receiving binary message.
+         */
+        Binary
+    };
 }
 namespace WebSocket {
     /**
@@ -91,8 +114,29 @@ namespace WebSocket {
 
         /**
          * This is the 
+        /**
+         * This flag indicates whether or not the webSocket is in the midst
+         * of sending a fragmented message.
+         */
+        FragmentedMessageType sending = FragmentedMessageType::None;
+
+
+        /**
+         * This flag indicates whether or not the webSocket is in the midst
+         * of receiving a fragmented  message.
+         */
+        FragmentedMessageType receiving = FragmentedMessageType::None;
+
+
+        /**
+         * This is the buffer that reassemble received data into a frame. 
          */
         std::vector< uint8_t > reassemblyBuffer;
+
+        /**
+         * This is the buffer that reassemble fragmented frames into a message. 
+         */
+        std::string reassemblyFragmentedBuffer;
         /* Methods */
 
         /**
@@ -158,6 +202,7 @@ namespace WebSocket {
             size_t headerLength,
             size_t payloadLength
         ) {
+            const bool fin = ((reassemblyBuffer[0] & FIN) != 0);
             const uint8_t opcode = (reassemblyBuffer[0] & 0x0F);
             std::string data;
             if (role == Role::Server) {
@@ -189,15 +234,68 @@ namespace WebSocket {
                     }
                 } break;
 
+                case OPCODE_CONTINUATION: {
+                    reassemblyFragmentedBuffer += data;
+                    switch (receiving)
+                    {
+                        case FragmentedMessageType::Text:
+                            if (
+                                fin
+                            ) {
+                                if (textDelegate != nullptr) {
+                                    textDelegate(reassemblyFragmentedBuffer);
+                                }
+                            } 
+                            break;
+                        case FragmentedMessageType::Binary:
+                            if (
+                                fin
+                            ) {
+                                if (binaryDelegate != nullptr) {
+                                    binaryDelegate(reassemblyFragmentedBuffer);
+                                }
+                            } 
+                            break;
+                        default:
+                            reassemblyFragmentedBuffer.clear();
+                            // TODO: unexpected continuation
+                            break;
+                    } 
+                    if (fin) {
+                        receiving = FragmentedMessageType::None;
+                        reassemblyFragmentedBuffer.clear();
+                    }       
+                } break;
+
                 case OPCODE_TEXT: {
-                    if (textDelegate != nullptr) {
-                        textDelegate(data);
+                    if (receiving == FragmentedMessageType::None) {
+                        if (fin) {
+                            if (textDelegate != nullptr) {
+                                textDelegate(data);
+                            }
+                        } else {
+                            receiving = FragmentedMessageType::Text;
+                            reassemblyFragmentedBuffer = data;
+                        }
+                    } else {
+                        // protocol violation verification
+                        // start of next message before last was complete
                     }
                 } break;
 
                 case OPCODE_BINARY: {
-                    if (binaryDelegate != nullptr) {
-                        binaryDelegate(data);
+                    if (receiving == FragmentedMessageType::None) {
+                        if (fin) {
+                            if (binaryDelegate != nullptr) {
+                                binaryDelegate(data);
+                            }
+                        } else {
+                            receiving = FragmentedMessageType::Binary;
+                            reassemblyFragmentedBuffer = data;
+                        }
+                    } else {
+                        // protocol violation verification
+                        // start of next message before last was complete
                     }
                 } break;
             }
@@ -302,12 +400,38 @@ namespace WebSocket {
         impl_->SendFrame(true, OPCODE_PONG, data);
     }
 
-    void WebSocket::SendText(const std::string& text) {
-        impl_->SendFrame(true, OPCODE_TEXT, text);
+    void WebSocket::SendText(const std::string& text, bool lastFragment) {
+        if (impl_->sending == FragmentedMessageType::Binary) {
+            return;
+        }
+        const auto opcode = (
+            (impl_->sending == FragmentedMessageType::Text)
+            ? OPCODE_CONTINUATION
+            : OPCODE_TEXT
+        );
+        impl_->SendFrame(lastFragment, opcode, text);
+        impl_->sending = (
+            lastFragment
+            ? FragmentedMessageType::None
+            : FragmentedMessageType::Text
+        );
     }
 
-    void WebSocket::SendBinary(const std::string& binary) {
-        impl_->SendFrame(true, OPCODE_BINARY, binary);
+    void WebSocket::SendBinary(const std::string& binary, bool lastFragment) {
+        if (impl_->sending == FragmentedMessageType::Text) {
+            return;
+        }
+        const auto opcode = (
+            (impl_->sending == FragmentedMessageType::Binary)
+            ? OPCODE_CONTINUATION
+            : OPCODE_BINARY
+        );
+        impl_->SendFrame(lastFragment, opcode, binary);
+        impl_->sending = (
+            lastFragment
+            ? FragmentedMessageType::None
+            : FragmentedMessageType::Binary
+        );
     }
 
     void WebSocket::SetPingDelegate(MessageReceivedDelegate pingDelegate) {

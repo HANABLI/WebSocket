@@ -127,18 +127,28 @@ namespace WebSocket {
         void SetBinaryDelegate(MessageReceivedDelegate binaryDelegate);
         /**
          * This method send a text message over the webSocket.
+        /**
+         * This method sends a text message, or fragment thereof,
+         * over the webSocket.
          * 
          * @param[in] text
-         *      This is the text message to send over the webSocket
+         *      This is the text message to send over the webSocket.
+         * @param[in] lastFragment
+         *      This indicates whether or not this is the last frame
+         *      in its message.
          */
-        void SendText(const std::string& text);
+        void SendText(const std::string& text, bool lastFragment = true);
         /**
-         * This method send a binary message over the webSocket.
+         * This method send a binary message, or fragment thereof,
+         * over the webSocket.
          * 
          * @param[in] binary
-         *      This is the binary message to send over the webSocket
+         *      This is the binary message to send over the webSocket.
+         * @param[in] lastFragment
+         *      This indicates whether or not this is the last frame
+         *      in its message.
          */
-        void SendBinary(const std::string& binary);
+        void SendBinary(const std::string& binary, bool lastFragment = true);
     private:
         /**
          * 
