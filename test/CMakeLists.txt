@@ -5,23 +5,28 @@
 cmake_minimum_required(VERSION 3.8)
 set(this WebSocketTests)
 
-set(Sources 
+set(Sources
     src/WebSocketTests.cpp
 )
 
 add_executable(${this} ${Sources})
-set_target_properties(${this} PROPERTIES 
+set_target_properties(${this} PROPERTIES
     FOLDER Tests
 )
 
 target_include_directories(${this} PRIVATE ..)
 
-target_link_libraries(${this} PUBLIC 
+target_link_libraries(${this} PUBLIC
     gtest_main
-    WebSocket 
+    Http
+    Uri
+    Sha1
+    Base64
+    WebSocket
+    StringUtils
 )
 
 add_test(
-    NAME ${this} 
+    NAME ${this}
     COMMAND ${this}
 )

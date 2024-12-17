@@ -1,18 +1,37 @@
 /**
  * @file WebSocket.cpp
- * 
+ *
  * This module contains the implementation of the WebSocket::WebSocket class
- * 
+ *
  * © 2024 by Hatem Nabli
  */
 
 #include <stdint.h>
+#include <memory>
+#include <string>
 #include <vector>
+#include <Sha1/Sha1.hpp>
+#include <Base64/Base64.hpp>
 #include <WebSocket/WebSocket.hpp>
-namespace {
-
+#include <StringUtils/StringUtils.hpp>
+#include <SystemUtils/CryptoRandom.hpp>
+namespace
+{
     /**
-     * 
+     * This is the the websocket key salt to add to the "Sec-WebSocket-Key" before
+     * computing  the SHA-1 hash and Base64 encoding to feorm the Sec-WebSocket-Accept.
+     */
+    const std::string WEBSOCKET_KEY_SALT = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    /**
+     * This is the supported version of the websocket.
+     */
+    const std::string CURRENTLY_SUPPORTED_WEBSOCKET_VERSION = "13";
+    /**
+     * This is the length of the websocket key
+     */
+    constexpr size_t REQUEIRED_KEY_LENGTH = 16;
+    /**
+     *
      */
     constexpr size_t MAX_CONTROL_FRAME_DATA_LENGTH = 125;
     /**
@@ -59,10 +78,11 @@ namespace {
     constexpr uint8_t OPCODE_CLOSE = 0X08;
 
     /**
-     * This is used to track what kind of message is being sent or 
+     * This is used to track what kind of message is being sent or
      * received in fragments.
      */
-    enum class FragmentedMessageType {
+    enum class FragmentedMessageType
+    {
         /**
          * sendig/receiving any message.
          */
@@ -76,8 +96,22 @@ namespace {
          */
         Binary
     };
-}
-namespace WebSocket {
+    /**
+     * This function computes the value of the "Sec-WebSocket-Accept"
+     * HTTP response header that matches the given value of the
+     * "Sec-WebSocket-Key" HTTP request headerd.
+     *
+     * @param[in]
+     *      This is the key for which to compute an answer using SHA-1
+     *      and Base64
+     */
+    std::string ComputeValidationKey(const std::string& key)
+    {
+        return Base64::EncodeToBase64(Sha1::Sha1(key + WEBSOCKET_KEY_SALT));
+    }
+}  // namespace
+namespace WebSocket
+{
     /**
      * This contains the private properties of a WebSocket instance.
      */
@@ -87,7 +121,7 @@ namespace WebSocket {
         /**
          * This is the connection to use to send and receive frames.
          */
-        std::shared_ptr< Http::Connection > connection;
+        std::shared_ptr<Http::Connection> connection;
 
         /**
          * This flag indicates whether or not the WebSocket has sent a close frame,
@@ -97,7 +131,7 @@ namespace WebSocket {
 
         /**
          * This flag indicates whether or not the WebSocket has receive a close frame.
-         * and is waiting for the user to finish and signal a close, in order to close 
+         * and is waiting for the user to finish and signal a close, in order to close
          * the webSocket.
          */
         bool closeWebSocketReceived = false;
@@ -142,52 +176,65 @@ namespace WebSocket {
          */
         FragmentedMessageType sending = FragmentedMessageType::None;
 
-
         /**
          * This flag indicates whether or not the webSocket is in the midst
          * of receiving a fragmented  message.
          */
         FragmentedMessageType receiving = FragmentedMessageType::None;
 
-
         /**
-         * This is the buffer that reassemble received data into a frame. 
+         * This is the buffer that reassemble received data into a frame.
          */
-        std::vector< uint8_t > reassemblyBuffer;
+        std::vector<uint8_t> reassemblyBuffer;
 
         /**
-         * This is the buffer that reassemble fragmented frames into a message. 
+         * This is the buffer that reassemble fragmented frames into a message.
          */
         std::string reassemblyFragmentedBuffer;
+
+        /**
+         * This is the cryptoRandom key of the WebSocket.
+         */
+        SystemUtils::CryptoRandom randomKey;
+
+        /**
+         * This is the randomly-generated key used to form the Sec-WebSocket-Key
+         * header sent in the HTTP request of the opening handshake, when opening
+         * as a client.
+         */
+        std::string key;
+
         /* Methods */
 
         /**
          * This method constructs and send a frame over the WebSocket.
-         * 
+         *
          * @param[in] fin
          *      This indicates whether or not to set the FIN bit in the frame.
-         * 
+         *
          * @param[in] opcode
          *      This is the opcode to set in the frame.
-         * 
+         *
          * @param[in] payload
          *      This is the payload to include in the frame.
          */
-        void SendFrame(
-            bool fin,
-            uint8_t opcode,
-            const std::string& payload
-        ) {
-            std::vector< uint8_t > frame;
+        void SendFrame(bool fin, uint8_t opcode, const std::string& payload)
+        {
+            std::vector<uint8_t> frame;
             frame.push_back((fin ? FIN : 0) + opcode);
             const uint8_t mask = ((role == WebSocket::Role::Client) ? MASK : 0);
-            if (payload.length() < 126) {
+            if (payload.length() < 126)
+            {
                 frame.push_back((uint8_t)payload.length() + mask);
-            } else if (payload.length() < 65536) {
+            }
+            else if (payload.length() < 65536)
+            {
                 frame.push_back(0x7E + mask);
                 frame.push_back((uint8_t)(payload.length() >> 8));
                 frame.push_back((uint8_t)(payload.length() & 0xFF));
-            } else {
+            }
+            else
+            {
                 frame.push_back(0x7F + mask);
                 frame.push_back((uint8_t)(payload.length() >> 56));
                 frame.push_back((uint8_t)(payload.length() >> 48) & 0xFF);
@@ -195,22 +242,25 @@ namespace WebSocket {
                 frame.push_back((uint8_t)(payload.length() >> 32) & 0xFF);
                 frame.push_back((uint8_t)(payload.length() >> 24) & 0xFF);
                 frame.push_back((uint8_t)(payload.length() >> 16) & 0xFF);
-                frame.push_back((uint8_t)(payload.length() >> 8) & 0xFF); 
-                frame.push_back((uint8_t)(payload.length() & 0xFF));          
+                frame.push_back((uint8_t)(payload.length() >> 8) & 0xFF);
+                frame.push_back((uint8_t)(payload.length() & 0xFF));
             }
-            if (mask == 0) {
-                (void)frame.insert(
-                    frame.end(),
-                    payload.begin(),
-                    payload.end()
-                );
-            } else {
+            if (mask == 0)
+            {
+                (void)frame.insert(frame.end(), payload.begin(), payload.end());
+            }
+            else
+            {
                 // TODO: need to pick one at randome from a source of entropy.
-                uint8_t maskingKey[4] = {0xDE, 0XAD, 0XBE, 0XEF};
-                for (size_t i = 0; i < sizeof(maskingKey); ++i) {
+                uint8_t maskingKey[4];
+                SystemUtils::CryptoRandom crypto;
+                crypto.Generate(maskingKey, sizeof(maskingKey));
+                for (size_t i = 0; i < sizeof(maskingKey); ++i)
+                {
                     frame.push_back(maskingKey[i]);
                 }
-                for (size_t i = 0; i < payload.length(); i++) {
+                for (size_t i = 0; i < payload.length(); i++)
+                {
                     frame.push_back(payload[i] ^ maskingKey[i % 4]);
                 }
             }
@@ -220,316 +270,432 @@ namespace WebSocket {
          * This method is called whenever the WebSocket has reassembled
          * a complete frame received from the remote peer.
          */
-        void ReceiveFrame(
-            size_t headerLength,
-            size_t payloadLength
-        ) {
+        void ReceiveFrame(size_t headerLength, size_t payloadLength)
+        {
             const bool fin = ((reassemblyBuffer[0] & FIN) != 0);
             const uint8_t opcode = (reassemblyBuffer[0] & 0x0F);
             std::string data;
-            if (role == Role::Server) {
+            if (role == Role::Server)
+            {
                 data.resize(payloadLength);
-                for (size_t i = 0; i < payloadLength; ++i) {
-                    data[i] = (
-                        reassemblyBuffer[headerLength + i]
-                        ^ reassemblyBuffer[headerLength - 4 + (i % 4)]
-                    );
+                for (size_t i = 0; i < payloadLength; ++i)
+                {
+                    data[i] = (reassemblyBuffer[headerLength + i] ^
+                               reassemblyBuffer[headerLength - 4 + (i % 4)]);
                 }
-            } else {
-                (void)data.assign(
-                    reassemblyBuffer.begin() + headerLength,
-                    reassemblyBuffer.begin() + headerLength + payloadLength                    
-                );
+            }
+            else
+            {
+                (void)data.assign(reassemblyBuffer.begin() + headerLength,
+                                  reassemblyBuffer.begin() + headerLength + payloadLength);
             }
             switch (opcode)
             {
-                case OPCODE_PING: {
-                    if (pingDelegate != nullptr) {
-                        pingDelegate(data);
-                    }
-                    SendFrame(true, OPCODE_PONG, data);
-                } break;
+            case OPCODE_PING:
+            {
+                if (pingDelegate != nullptr)
+                {
+                    pingDelegate(data);
+                }
+                SendFrame(true, OPCODE_PONG, data);
+            }
+            break;
 
-                case OPCODE_PONG: {
-                    if (pongDelegate != nullptr) {
-                        pongDelegate(data);
-                    }
-                } break;
+            case OPCODE_PONG:
+            {
+                if (pongDelegate != nullptr)
+                {
+                    pongDelegate(data);
+                }
+            }
+            break;
 
-                case OPCODE_CLOSE: {
-                    unsigned int statusCode = 1005;
-                    std::string reason;
-                    if (data.length() >= 2)  {
-                        statusCode = (
-                            (((unsigned int)data[0] << 8) & 0xFF00)
-                            + ((unsigned int)data[1] & 0x00FF)
-                        );
-                        reason = data.substr(2);
-                    }
-                    const auto closeWasSent = closeWebSocketSent;
-                    closeWebSocketReceived = true;
-                    if (closeReceivedDelegate != nullptr) {
-                        closeReceivedDelegate(statusCode, reason);
-                    }
-                    if (closeWasSent) {
-                        connection->Break(false);
-                    }
-                } break;
+            case OPCODE_CLOSE:
+            {
+                unsigned int statusCode = 1005;
+                std::string reason;
+                if (data.length() >= 2)
+                {
+                    statusCode = ((((unsigned int)data[0] << 8) & 0xFF00) +
+                                  ((unsigned int)data[1] & 0x00FF));
+                    reason = data.substr(2);
+                }
+                const auto closeWasSent = closeWebSocketSent;
+                closeWebSocketReceived = true;
+                if (closeReceivedDelegate != nullptr)
+                {
+                    closeReceivedDelegate(statusCode, reason);
+                }
+                if (closeWasSent)
+                {
+                    connection->Break(false);
+                }
+            }
+            break;
 
-                case OPCODE_CONTINUATION: {
-                    reassemblyFragmentedBuffer += data;
-                    switch (receiving)
+            case OPCODE_CONTINUATION:
+            {
+                reassemblyFragmentedBuffer += data;
+                switch (receiving)
+                {
+                case FragmentedMessageType::Text:
+                    if (fin)
                     {
-                        case FragmentedMessageType::Text:
-                            if (
-                                fin
-                            ) {
-                                if (textDelegate != nullptr) {
-                                    textDelegate(reassemblyFragmentedBuffer);
-                                }
-                            } 
-                            break;
-                        case FragmentedMessageType::Binary:
-                            if (
-                                fin
-                            ) {
-                                if (binaryDelegate != nullptr) {
-                                    binaryDelegate(reassemblyFragmentedBuffer);
-                                }
-                            } 
-                            break;
-                        default:
-                            reassemblyFragmentedBuffer.clear();
-                            // TODO: unexpected continuation
-                            break;
-                    } 
-                    if (fin) {
-                        receiving = FragmentedMessageType::None;
-                        reassemblyFragmentedBuffer.clear();
-                    }       
-                } break;
-
-                case OPCODE_TEXT: {
-                    if (receiving == FragmentedMessageType::None) {
-                        if (fin) {
-                            if (textDelegate != nullptr) {
-                                textDelegate(data);
-                            }
-                        } else {
-                            receiving = FragmentedMessageType::Text;
-                            reassemblyFragmentedBuffer = data;
+                        if (textDelegate != nullptr)
+                        {
+                            textDelegate(reassemblyFragmentedBuffer);
                         }
-                    } else {
-                        // protocol violation verification
-                        // start of next message before last was complete
                     }
-                } break;
-
-                case OPCODE_BINARY: {
-                    if (receiving == FragmentedMessageType::None) {
-                        if (fin) {
-                            if (binaryDelegate != nullptr) {
-                                binaryDelegate(data);
-                            }
-                        } else {
-                            receiving = FragmentedMessageType::Binary;
-                            reassemblyFragmentedBuffer = data;
+                    break;
+                case FragmentedMessageType::Binary:
+                    if (fin)
+                    {
+                        if (binaryDelegate != nullptr)
+                        {
+                            binaryDelegate(reassemblyFragmentedBuffer);
                         }
-                    } else {
-                        // protocol violation verification
-                        // start of next message before last was complete
                     }
-                } break;
+                    break;
+                default:
+                    reassemblyFragmentedBuffer.clear();
+                    // TODO: unexpected continuation
+                    break;
+                }
+                if (fin)
+                {
+                    receiving = FragmentedMessageType::None;
+                    reassemblyFragmentedBuffer.clear();
+                }
+            }
+            break;
+
+            case OPCODE_TEXT:
+            {
+                if (receiving == FragmentedMessageType::None)
+                {
+                    if (fin)
+                    {
+                        if (textDelegate != nullptr)
+                        {
+                            textDelegate(data);
+                        }
+                    }
+                    else
+                    {
+                        receiving = FragmentedMessageType::Text;
+                        reassemblyFragmentedBuffer = data;
+                    }
+                }
+                else
+                {
+                    // protocol violation verification
+                    // start of next message before last was complete
+                }
+            }
+            break;
+
+            case OPCODE_BINARY:
+            {
+                if (receiving == FragmentedMessageType::None)
+                {
+                    if (fin)
+                    {
+                        if (binaryDelegate != nullptr)
+                        {
+                            binaryDelegate(data);
+                        }
+                    }
+                    else
+                    {
+                        receiving = FragmentedMessageType::Binary;
+                        reassemblyFragmentedBuffer = data;
+                    }
+                }
+                else
+                {
+                    // protocol violation verification
+                    // start of next message before last was complete
+                }
+            }
+            break;
             }
         }
 
         /**
-         * This method is called whenever the WebSocket receives data from 
+         * This method is called whenever the WebSocket receives data from
          * the remote peer.
-         * 
+         *
          * @param[in] data
          *      This is the data received from the remote peer.
          */
-        void ReceiveData(
-            const std::vector< uint8_t >& data
-        ){
-            (void)reassemblyBuffer.insert(
-                reassemblyBuffer.end(),
-                data.begin(),
-                data.end()
-            );
-            for(;;) {
-                if (reassemblyBuffer.size() < 2) {
+        void ReceiveData(const std::vector<uint8_t>& data)
+        {
+            (void)reassemblyBuffer.insert(reassemblyBuffer.end(), data.begin(), data.end());
+            for (;;)
+            {
+                if (reassemblyBuffer.size() < 2)
+                {
                     return;
                 }
                 const auto lengthFirstOctet = (reassemblyBuffer[1] & ~MASK);
                 size_t headerLength, payloadLength;
-                if (lengthFirstOctet == 0x7E) {
-                    headerLength = 4; 
-                    if (reassemblyBuffer.size() < headerLength) {
-                         return;
-                    }        
-                    payloadLength = (
-                        ((size_t)reassemblyBuffer[2] << 8)
-                        + (size_t)reassemblyBuffer[3]
-                    );
-                } else if (lengthFirstOctet == 0x7F) {
-                    headerLength = 10; 
-                    if (reassemblyBuffer.size() < headerLength) {
+                if (lengthFirstOctet == 0x7E)
+                {
+                    headerLength = 4;
+                    if (reassemblyBuffer.size() < headerLength)
+                    {
                         return;
                     }
-                    payloadLength = (
-                        ((size_t)reassemblyBuffer[2] << 56)
-                        + ((size_t)reassemblyBuffer[3] << 48)
-                        + ((size_t)reassemblyBuffer[4] << 40)
-                        + ((size_t)reassemblyBuffer[5] << 32)
-                        + ((size_t)reassemblyBuffer[6] << 24)
-                        + ((size_t)reassemblyBuffer[7] << 16)
-                        + ((size_t)reassemblyBuffer[8] << 8)
-                        + (size_t)reassemblyBuffer[9]
-                    );
-                } else {
+                    payloadLength =
+                        (((size_t)reassemblyBuffer[2] << 8) + (size_t)reassemblyBuffer[3]);
+                }
+                else if (lengthFirstOctet == 0x7F)
+                {
+                    headerLength = 10;
+                    if (reassemblyBuffer.size() < headerLength)
+                    {
+                        return;
+                    }
+                    payloadLength =
+                        (((size_t)reassemblyBuffer[2] << 56) + ((size_t)reassemblyBuffer[3] << 48) +
+                         ((size_t)reassemblyBuffer[4] << 40) + ((size_t)reassemblyBuffer[5] << 32) +
+                         ((size_t)reassemblyBuffer[6] << 24) + ((size_t)reassemblyBuffer[7] << 16) +
+                         ((size_t)reassemblyBuffer[8] << 8) + (size_t)reassemblyBuffer[9]);
+                }
+                else
+                {
                     headerLength = 2;
                     payloadLength = (size_t)lengthFirstOctet;
                 }
-                if (role == Role::Server) {
+                if (role == Role::Server)
+                {
                     headerLength += 4;
                 }
-                if (reassemblyBuffer.size() < headerLength + payloadLength) {
+                if (reassemblyBuffer.size() < headerLength + payloadLength)
+                {
                     return;
                 }
                 ReceiveFrame(headerLength, payloadLength);
                 (void)reassemblyBuffer.erase(
                     reassemblyBuffer.begin(),
-                    reassemblyBuffer.begin() + headerLength + payloadLength
-                );
-            } 
+                    reassemblyBuffer.begin() + headerLength + payloadLength);
+            }
         }
     };
 
     WebSocket::~WebSocket() = default;
 
-    WebSocket::WebSocket(): impl_(new Impl) {
+    WebSocket::WebSocket() : impl_(new Impl) {}
 
-    }
-
-    void WebSocket::Open(
-        std::shared_ptr< Http::Connection > connection,
-        Role role
-    ) {
+    void WebSocket::Open(std::shared_ptr<Http::Connection> connection, Role role)
+    {
         impl_->connection = connection;
         impl_->role = role;
         impl_->connection->SetDataReceivedDelegate(
-            [this](
-                const std::vector< uint8_t >& data
-            ){
-                impl_->ReceiveData(data);
-            }
-        );
+            [this](const std::vector<uint8_t>& data) { impl_->ReceiveData(data); });
     }
 
-    void WebSocket::Close(
-        unsigned int statusCode,
-        const std::string& reason
-    ) {
-        if (impl_->closeWebSocketSent) {
+    bool WebSocket::OpenAsServer(std::shared_ptr<Http::Connection> connection,
+                                 const Http::Server::Request& request,
+                                 Http::Client::Response& response)
+    {
+        if (request.headers.GetHeaderValue("Sec-WebSocket-Version") !=
+            CURRENTLY_SUPPORTED_WEBSOCKET_VERSION)
+        {
+            return false;
+        }
+        bool foundUpgradeToken = false;
+        for (const auto token : request.headers.GetHeaderTokens("Connection"))
+        {
+            if (token == "upgrade")
+            {
+                foundUpgradeToken = true;
+                break;
+            }
+        }
+        if (!foundUpgradeToken)
+        {
+            return false;
+        }
+        if (StringUtils::NormalizeCaseInsensitiveString(
+                request.headers.GetHeaderValue("Upgrade")) != "websocket")
+        {
+            return false;
+        }
+        const auto key = request.headers.GetHeaderValue("sec-WebSocket-key");
+
+        if (Base64::DecodeFromBase64(key).length() != REQUEIRED_KEY_LENGTH)
+        {
+            return false;
+        }
+        auto connectionTockens = request.headers.GetHeaderMultiValues("connection");
+        connectionTockens.push_back("upgrade");
+        response.statusCode = 101;
+        response.status = "Switching Protocols";
+        response.headers.SetHeader("Connection", connectionTockens, true);
+        response.headers.SetHeader("Upgrade", "websocket");
+        response.headers.SetHeader("Sec-WebSocket-Accept", ComputeValidationKey(key));
+        Open(connection, WebSocket::Role::Server);
+        return true;
+    }
+
+    void WebSocket::StartOpenAsClient(Http::Server::Request& request)
+    {
+        char nonce[16];
+        request.headers.SetHeader("Sec-WebSocket-Version", CURRENTLY_SUPPORTED_WEBSOCKET_VERSION);
+        impl_->randomKey.Generate(nonce, sizeof(nonce));
+        impl_->key = Base64::EncodeToBase64(std::string(nonce, sizeof(nonce)));
+        request.headers.SetHeader("Sec-WebSocket-Key", impl_->key);
+        request.headers.SetHeader("Upgrade", "websocket");
+        auto connectionTockens = request.headers.GetHeaderMultiValues("connection");
+        connectionTockens.push_back("upgrade");
+        request.headers.SetHeader("Connection", connectionTockens, true);
+    }
+
+    bool WebSocket::CloseOpenAsClient(std::shared_ptr<Http::Connection> connection,
+                                      const Http::Client::Response& response)
+    {
+        if (response.statusCode != 101)
+        {
+            return false;
+        }
+        bool foundUpgradeToken = false;
+        for (const auto token : response.headers.GetHeaderTokens("Connection"))
+        {
+            if (token == "upgrade")
+            {
+                foundUpgradeToken = true;
+                break;
+            }
+        }
+        if (!foundUpgradeToken)
+        {
+            return false;
+        }
+        if (StringUtils::NormalizeCaseInsensitiveString(
+                response.headers.GetHeaderValue("Upgrade")) != "websocket")
+        {
+            return false;
+        }
+        if (response.headers.GetHeaderValue("Sec-WebSocket-Accept") !=
+            ComputeValidationKey(impl_->key))
+        {
+            return false;
+        }
+        Open(connection, WebSocket::Role::Client);
+        return true;
+    }
+
+    void WebSocket::Close(unsigned int statusCode, const std::string& reason)
+    {
+        if (impl_->closeWebSocketSent)
+        {
             return;
         }
         impl_->closeWebSocketSent = true;
-        if (statusCode == 1006) {
+        if (statusCode == 1006)
+        {
             impl_->connection->Break(false);
-        } else {
+        }
+        else
+        {
             std::string data;
-            if (statusCode != 1005) {
+            if (statusCode != 1005)
+            {
                 data.push_back((uint8_t)(statusCode >> 8));
                 data.push_back((uint8_t)(statusCode & 0xFF));
                 data += reason;
             }
             impl_->SendFrame(true, OPCODE_CLOSE, data);
-            if (impl_->closeWebSocketReceived) {
+            if (impl_->closeWebSocketReceived)
+            {
                 impl_->connection->Break(true);
             }
         }
     }
-    
-    void WebSocket::Ping(const std::string& data) {
-        if (impl_->closeWebSocketSent) {
+
+    void WebSocket::Ping(const std::string& data)
+    {
+        if (impl_->closeWebSocketSent)
+        {
             return;
         }
-        if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH) {
+        if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH)
+        {
             return;
         }
         impl_->SendFrame(true, OPCODE_PING, data);
     }
 
-    void WebSocket::Pong(const std::string& data) {
-        if (impl_->closeWebSocketSent) {
+    void WebSocket::Pong(const std::string& data)
+    {
+        if (impl_->closeWebSocketSent)
+        {
             return;
         }
-        if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH) {
+        if (data.length() > MAX_CONTROL_FRAME_DATA_LENGTH)
+        {
             return;
         }
         impl_->SendFrame(true, OPCODE_PONG, data);
     }
 
-    void WebSocket::SendText(const std::string& text, bool lastFragment) {
-        if (impl_->closeWebSocketSent) {
+    void WebSocket::SendText(const std::string& text, bool lastFragment)
+    {
+        if (impl_->closeWebSocketSent)
+        {
             return;
         }
-        if (impl_->sending == FragmentedMessageType::Binary) {
+        if (impl_->sending == FragmentedMessageType::Binary)
+        {
             return;
         }
-        const auto opcode = (
-            (impl_->sending == FragmentedMessageType::Text)
-            ? OPCODE_CONTINUATION
-            : OPCODE_TEXT
-        );
+        const auto opcode =
+            ((impl_->sending == FragmentedMessageType::Text) ? OPCODE_CONTINUATION : OPCODE_TEXT);
         impl_->SendFrame(lastFragment, opcode, text);
-        impl_->sending = (
-            lastFragment
-            ? FragmentedMessageType::None
-            : FragmentedMessageType::Text
-        );
+        impl_->sending = (lastFragment ? FragmentedMessageType::None : FragmentedMessageType::Text);
     }
 
-    void WebSocket::SendBinary(const std::string& binary, bool lastFragment) {
-        if (impl_->closeWebSocketSent) {
+    void WebSocket::SendBinary(const std::string& binary, bool lastFragment)
+    {
+        if (impl_->closeWebSocketSent)
+        {
             return;
         }
-        if (impl_->sending == FragmentedMessageType::Text) {
+        if (impl_->sending == FragmentedMessageType::Text)
+        {
             return;
         }
-        const auto opcode = (
-            (impl_->sending == FragmentedMessageType::Binary)
-            ? OPCODE_CONTINUATION
-            : OPCODE_BINARY
-        );
+        const auto opcode = ((impl_->sending == FragmentedMessageType::Binary) ? OPCODE_CONTINUATION
+                                                                               : OPCODE_BINARY);
         impl_->SendFrame(lastFragment, opcode, binary);
-        impl_->sending = (
-            lastFragment
-            ? FragmentedMessageType::None
-            : FragmentedMessageType::Binary
-        );
+        impl_->sending =
+            (lastFragment ? FragmentedMessageType::None : FragmentedMessageType::Binary);
     }
 
-    void WebSocket::SetPingDelegate(MessageReceivedDelegate pingDelegate) {
+    void WebSocket::SetPingDelegate(MessageReceivedDelegate pingDelegate)
+    {
         impl_->pingDelegate = pingDelegate;
     }
 
-    void WebSocket::SetPongDelegate(MessageReceivedDelegate pongDelegate) {
+    void WebSocket::SetPongDelegate(MessageReceivedDelegate pongDelegate)
+    {
         impl_->pongDelegate = pongDelegate;
     }
 
-    void WebSocket::SetTextDelegate(MessageReceivedDelegate textDelegate) {
+    void WebSocket::SetTextDelegate(MessageReceivedDelegate textDelegate)
+    {
         impl_->textDelegate = textDelegate;
     }
 
-    void WebSocket::SetBinaryDelegate(MessageReceivedDelegate binaryDelegate) {
+    void WebSocket::SetBinaryDelegate(MessageReceivedDelegate binaryDelegate)
+    {
         impl_->binaryDelegate = binaryDelegate;
     }
 
-    void WebSocket::SetCloseDelegate(CloseReceivedDelegate closeReceivedDelegate) {
+    void WebSocket::SetCloseDelegate(CloseReceivedDelegate closeReceivedDelegate)
+    {
         impl_->closeReceivedDelegate = closeReceivedDelegate;
     }
 
-}
+}  // namespace WebSocket

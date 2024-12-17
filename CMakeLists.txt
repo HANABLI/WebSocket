@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.8)
 
 set(this WebSocket)
 
-set(Headers 
+set(Headers
     include/WebSocket/WebSocket.hpp
 )
 
@@ -23,7 +23,8 @@ target_include_directories(${this} PUBLIC include)
 
 target_link_libraries(${this}
     Http
+    Base64
+    Sha1
 )
 
 add_subdirectory(test)
- 
