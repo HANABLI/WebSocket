@@ -25,6 +25,7 @@ target_link_libraries(${this}
     Http
     Base64
     Sha1
+    Utf8
 )
 
 add_subdirectory(test)

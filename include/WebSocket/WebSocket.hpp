@@ -8,9 +8,9 @@
  *
  * © 2024 by Hatem Nabli
  */
+#include <Http/Client.hpp>
 #include <Http/Connection.hpp>
 #include <Http/Server.hpp>
-#include <Http/Client.hpp>
 #include <functional>
 #include <memory>
 
@@ -103,8 +103,8 @@ namespace WebSocket
          * @param[in] response
          *      This is the reason message to send in the close frame.
          */
-        bool CloseOpenAsClient(std::shared_ptr<Http::Connection> connection,
-                               const Http::Client::Response& response);
+        bool CompleteOpenAsClient(std::shared_ptr<Http::Connection> connection,
+                                  const Http::Client::Response& response);
         /**
          * This method open as server the WebSocket connection.
          *
