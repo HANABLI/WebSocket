@@ -66,9 +66,9 @@ namespace WebSocket
         // LifeCycle managment
         ~WebSocket();
         WebSocket(const WebSocket&) = delete;
-        WebSocket(WebSocket&&) = delete;
+        WebSocket(WebSocket&&) noexcept;
         WebSocket& operator=(const WebSocket&) = delete;
-        WebSocket& operator=(WebSocket&&) = delete;
+        WebSocket& operator=(WebSocket&&) noexcept;
 
         // Public Methods
     public:
@@ -117,17 +117,7 @@ namespace WebSocket
          */
         bool OpenAsServer(std::shared_ptr<Http::Connection> connection,
                           const Http::Server::Request& request, Http::Client::Response& response);
-        /**
-         * This method initiates the closing of the WebSocket,
-         * sending a close frame with the given status code and reason.
-         *
-         * @param[in] connection
-         *      This is the status code to send in the close frame.
-         * @param[in] response
-         *      This is the reason message to send in the close frame.
-         */
-        bool CloseOpenAsServer(std::shared_ptr<Http::Connection> connection,
-                               const Http::Client::Response& response);
+
         /**
          * This method initiates the closing of the WebSocket,
          * sending a close frame with the given status code and reason.

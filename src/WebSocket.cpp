@@ -506,7 +506,9 @@ namespace WebSocket
         }
     };
 
-    WebSocket::~WebSocket() = default;
+    WebSocket::~WebSocket() noexcept = default;
+    WebSocket::WebSocket(WebSocket&&) noexcept = default;
+    WebSocket& WebSocket::operator=(WebSocket&&) noexcept = default;
 
     WebSocket::WebSocket() : impl_(new Impl) {}
 
