@@ -522,7 +522,7 @@ namespace WebSocket
 
     bool WebSocket::OpenAsServer(std::shared_ptr<Http::Connection> connection,
                                  const Http::Server::Request& request,
-                                 Http::Client::Response& response) {
+                                 Http::Client::Response& response, const std::string& trailer) {
         if (request.headers.GetHeaderValue("Sec-WebSocket-Version") !=
             CURRENTLY_SUPPORTED_WEBSOCKET_VERSION)
         { return false; }
@@ -552,6 +552,8 @@ namespace WebSocket
         response.headers.SetHeader("Upgrade", "websocket");
         response.headers.SetHeader("Sec-WebSocket-Accept", ComputeValidationKey(key));
         Open(connection, WebSocket::Role::Server);
+        if (!trailer.empty())
+        { impl_->ReceiveData(std::vector<uint8_t>(trailer.begin(), trailer.end())); }
         return true;
     }
 

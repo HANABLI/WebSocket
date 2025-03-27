@@ -300,7 +300,7 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServer__Test) {
     request.headers.SetHeader("Sec-webSocket-key", key);
     Http::Client::Response response;
     auto connection = std::make_shared<MockConnection>();
-    ASSERT_TRUE(ws.OpenAsServer(connection, request, response));
+    ASSERT_TRUE(ws.OpenAsServer(connection, request, response, ""));
     EXPECT_EQ(101, response.statusCode);
     EXPECT_EQ("Switching Protocols", response.status);
     EXPECT_EQ("websocket", StringUtils::NormalizeCaseInsensitiveString(
@@ -320,6 +320,27 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServer__Test) {
     ws.Ping("Hello");
     ASSERT_FALSE(connection->brokenByWebSocket);
     ASSERT_EQ("\x89\x05Hello", connection->webSocketOutput);
+}
+
+TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServerWithTrailer__Test) {
+    WebSocket::WebSocket ws;
+    Http::Server::Request request;
+    request.headers.SetHeader("Sec-WebSocket-Version", "13");
+    request.headers.SetHeader("Connection", "upgrade");
+    request.headers.SetHeader("Upgrade", "websocket");
+    const std::string key = Base64::EncodeToBase64("abcdefghijklmnop");
+    request.headers.SetHeader("Sec-webSocket-key", key);
+    Http::Client::Response response;
+    auto connection = std::make_shared<MockConnection>();
+    std::vector<std::string> pongs;
+    ws.SetPongDelegate([&pongs](const std::string& data) { pongs.push_back(data); });
+    ASSERT_TRUE(ws.OpenAsServer(connection, request, response, "\x8A"));
+    EXPECT_TRUE(pongs.empty());
+    connection->dataReceivedDelegate({0x80, 0x12, 0x34, 0x56, 0X76});
+    ASSERT_EQ((std::vector<std::string>{
+                  "",
+              }),
+              pongs);
 }
 
 TEST(WebSocketTests, WebSocketTests_SendPingNormaly__Test) {
@@ -756,7 +777,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerNotGetMethod) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerWrongUpgrade) {
@@ -770,7 +791,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongUpgrade) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerMissUpgrade) {
@@ -783,7 +804,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissUpgrade) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerMissConnection) {
@@ -796,7 +817,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissConnection) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerWrongConnection) {
@@ -810,7 +831,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongConnection) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerWrongVersion) {
@@ -824,7 +845,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongVersion) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerMissingVersion) {
@@ -837,7 +858,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissingVersion) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerWrongKey) {
@@ -851,7 +872,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongKey) {
     request.headers.SetHeader("Sec-WebSocket-Key", key);
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, FailCompleteOpenAsServerMissingKey) {
@@ -863,7 +884,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissingKey) {
     request.headers.SetHeader("Sec-WebSocket-Version", "13");
     Http::Client::Response response;
     const auto connection = std::make_shared<MockConnection>();
-    ASSERT_FALSE(ws.OpenAsServer(connection, request, response));
+    ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
 TEST(WebSocketTests, WebSocketTests_BadUtf8InText__Test) {

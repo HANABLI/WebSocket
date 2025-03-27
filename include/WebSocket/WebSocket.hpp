@@ -102,6 +102,9 @@ namespace WebSocket
          *      This is the status code to send in the close frame.
          * @param[in] response
          *      This is the reason message to send in the close frame.
+         * @return
+         *      return an indication of whether or not a web socket comlete
+         *      oppening as a client.
          */
         bool CompleteOpenAsClient(std::shared_ptr<Http::Connection> connection,
                                   const Http::Client::Response& response);
@@ -111,12 +114,24 @@ namespace WebSocket
          * @param[in] connection
          *      This is the status code to send in the close frame.
          * @param[in] request
-         *      This is the reason message to send in the close frame.
+         *      This is the request received to initiate the opening
+         *      handshake of the WebSocket.
          * @param[in] response
-         *      This is the reason message to send in the close frame.
+         *      This is the response that completes the opening handshake
+         *      of the WebSocket. This response may be updated to indicate
+         *      that the handshake failed.
+         * @param[in] trailer
+         *      This holds any characters that have already been received
+         *      by the server and come after the end of the current request.
+         *      A handler that upgrades this connection might want to interpret
+         *      these characters whithin the context of the upgraded connection
+         * @return
+         *      An indication of whether or not the opening handshake succeeded
+         *      is returned.
          */
         bool OpenAsServer(std::shared_ptr<Http::Connection> connection,
-                          const Http::Server::Request& request, Http::Client::Response& response);
+                          const Http::Server::Request& request, Http::Client::Response& response,
+                          const std::string& trailer);
 
         /**
          * This method initiates the closing of the WebSocket,
