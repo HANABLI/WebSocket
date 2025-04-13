@@ -119,6 +119,11 @@ namespace WebSocket
     {
         /* Properties */
         /**
+         * This is a helper object used to generate and publish
+         * diagnostic message.
+         */
+        SystemUtils::DiagnosticsSender diagnosticsSender;
+        /**
          * This is the connection to use to send and receive frames.
          */
         std::shared_ptr<Http::Connection> connection;
@@ -205,7 +210,7 @@ namespace WebSocket
         std::string key;
 
         /* Methods */
-
+        Impl() : diagnosticsSender("webSockets::WebSockets") {}
         /**
          * This method constructs and send a frame over the WebSocket.
          *
@@ -490,7 +495,12 @@ namespace WebSocket
         /**
          * This method is called if the connection is broken by the remote peer.
          */
-        void ConnectionBroken() { Close(1006, "connection broken by peer", true); }
+        void ConnectionBroken() {
+            Close(1006, "connection broken by peer", true);
+            diagnosticsSender.SendDiagnosticInformationFormatted(
+                1, StringUtils::sprintf("Connection to %s Broken by peer", connection->GetPeerId())
+                       .c_str());
+        }
         /**
          * This method is called if a text message has been received in the
          * reassemblyBuffer.
