@@ -986,3 +986,16 @@ TEST(WebSocketTests, WebSocketTests_InvalidUtf8InReason__Test) {
     EXPECT_EQ(1007, codeReceived);
     EXPECT_EQ("invalid UTF-8 encoding in close reason", reasonReceived);
 }
+
+TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServerTockenCapitalized__Test) {
+    WebSocket::WebSocket ws;
+    Http::Server::Request request;
+    request.headers.SetHeader("Sec-WebSocket-Version", "13");
+    request.headers.SetHeader("Connection", "Upgrade");
+    request.headers.SetHeader("Upgrade", "websocket");
+    const std::string key = Base64::EncodeToBase64("abcdefghijklmnop");
+    request.headers.SetHeader("Sec-webSocket-key", key);
+    Http::Client::Response response;
+    auto connection = std::make_shared<MockConnection>();
+    ASSERT_TRUE(ws.OpenAsServer(connection, request, response, ""));
+}
