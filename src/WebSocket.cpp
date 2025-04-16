@@ -210,7 +210,7 @@ namespace WebSocket
         std::string key;
 
         /* Methods */
-        Impl() : diagnosticsSender("webSockets::WebSockets") {}
+        Impl() : diagnosticsSender("WebSocket::WebSocket") {}
         /**
          * This method constructs and send a frame over the WebSocket.
          *
@@ -322,7 +322,13 @@ namespace WebSocket
                     }
                 }
                 if (!fail)
-                { OnCloseReceipt(statusCode, reason); }
+                {
+                    OnCloseReceipt(statusCode, reason);
+                    diagnosticsSender.SendDiagnosticInformationFormatted(
+                        1, StringUtils::sprintf("Connection to %s closed by peer",
+                                                connection->GetPeerId().c_str())
+                               .c_str());
+                }
             }
             break;
 
@@ -474,6 +480,9 @@ namespace WebSocket
                     OnCloseReceipt(statusCode, reason);
                 } else if (closeWebSocketReceived)
                 { connection->Break(true); }
+                diagnosticsSender.SendDiagnosticInformationFormatted(
+                    1, "Connection to %s closed (%s)", connection->GetPeerId().c_str(),
+                    reason.c_str());
             }
         }
         /**
@@ -498,7 +507,8 @@ namespace WebSocket
         void ConnectionBroken() {
             Close(1006, "connection broken by peer", true);
             diagnosticsSender.SendDiagnosticInformationFormatted(
-                1, StringUtils::sprintf("Connection to %s Broken by peer", connection->GetPeerId())
+                1, StringUtils::sprintf("Connection to %s Broken by peer",
+                                        connection->GetPeerId().c_str())
                        .c_str());
         }
         /**
@@ -521,6 +531,11 @@ namespace WebSocket
     WebSocket& WebSocket::operator=(WebSocket&&) noexcept = default;
 
     WebSocket::WebSocket() : impl_(new Impl) {}
+
+    SystemUtils::DiagnosticsSender::UnsubscribeDelegate WebSocket::SubscribeToDiagnostics(
+        SystemUtils::DiagnosticsSender::DiagnosticMessageDelegate delegate, size_t minLevel) {
+        return impl_->diagnosticsSender.SubscribeToDiagnostics(delegate, minLevel);
+    }
 
     void WebSocket::Open(std::shared_ptr<Http::Connection> connection, Role role) {
         impl_->connection = connection;

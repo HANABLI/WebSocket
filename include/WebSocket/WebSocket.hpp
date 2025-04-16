@@ -78,6 +78,25 @@ namespace WebSocket
         WebSocket();
 
         /**
+         * This method forms a new subscription to diagnostic
+         * messages published by the sender.
+         *
+         * @param[in] delegate
+         *       This is the function to call to deliver messages
+         *       to this subscriber.
+         *
+         * @param[in] minLevel
+         *       This is the minimum level of message that this subscriber
+         *       desires to receive.
+         * @return
+         *       A function is returned which my be called
+         *       to terminate the subscription.
+         */
+        SystemUtils::DiagnosticsSender::UnsubscribeDelegate SubscribeToDiagnostics(
+            SystemUtils::DiagnosticsSender::DiagnosticMessageDelegate delegate,
+            size_t minLevel = 0);
+
+        /**
          * This method open the WebSocket connection in a given role.
          *
          * @param[in] connection

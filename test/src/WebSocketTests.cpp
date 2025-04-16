@@ -93,8 +93,40 @@ namespace
     };
 }  // namespace
 
-TEST(WebSocketTests, WebSocketTests_InitiateOpenAsClient__Test) {
+struct WebSocketTests : public ::testing::Test
+{
+    // Properties
+    /**
+     * This is the websocket object under test.
+     */
     WebSocket::WebSocket ws;
+    /**
+     * These are the diagnostic messages that have been received
+     * from the unit under test.
+     */
+    std::vector<std::string> diagnosticMessages;
+    /**
+     * This is the delegate obtained when subscribing
+     * to receive diagnostic messages from the unit under test.
+     * It's called to terminate the subscription.
+     */
+    SystemUtils::DiagnosticsSender::UnsubscribeDelegate diagnosticsUnsubscribeDelegate;
+
+    // Methods
+    virtual void SetUp() {
+        diagnosticsUnsubscribeDelegate = ws.SubscribeToDiagnostics(
+            [this](std::string senderName, size_t level, std::string message)
+            {
+                diagnosticMessages.push_back(StringUtils::sprintf("%s[%zu]: %s", senderName.c_str(),
+                                                                  level, message.c_str()));
+            },
+            0);
+    }
+
+    virtual void TearDown() { diagnosticsUnsubscribeDelegate(); }
+};
+
+TEST_F(WebSocketTests, WebSocketTests_InitiateOpenAsClient__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -117,8 +149,7 @@ TEST(WebSocketTests, WebSocketTests_InitiateOpenAsClient__Test) {
     EXPECT_TRUE(foundUpgradeToken);
 }
 
-TEST(WebSocketTests, WebSocketTests_ConnectionBreaksAbnormally__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ConnectionBreaksAbnormally__Test) {
     const auto connection = std::make_shared<MockConnection>();
     Http::Server::Request request;
     Http::Client::Response response;
@@ -141,8 +172,7 @@ TEST(WebSocketTests, WebSocketTests_ConnectionBreaksAbnormally__Test) {
     EXPECT_EQ("connection broken by peer", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_CompleteOpenAsClient__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_CompleteOpenAsClient__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -151,8 +181,8 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsClient__Test) {
     response.headers.SetHeader("Upgrade", "websocket");
     response.headers.SetHeader(
         "Sec-WebSocket-Accept",
-        Base64::EncodeToBase64(Sha1::Sha1(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
-                                          "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+        Base64::EncodeToBase64(Sha1::Sha1Bytes(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
+                                               "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
     auto connection = std::make_shared<MockConnection>();
     ASSERT_TRUE(ws.CompleteOpenAsClient(connection, response));
     const std::string data = "Hello!";
@@ -166,8 +196,7 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsClient__Test) {
     }
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingUpgrade__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingUpgrade__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -181,8 +210,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingUpgrade_
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongUpgrade__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongUpgrade__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -197,8 +225,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongUpgrade__T
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingConnection__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingConnection__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -212,8 +239,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingConnecti
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongConnection__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongConnection__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -228,8 +254,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongConnection
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongAccept__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongAccept__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -244,8 +269,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToWrongAccept__Te
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingAccept__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingAccept__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -256,8 +280,7 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToMissingAccept__
     ASSERT_FALSE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancExtension__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancExtension__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -266,15 +289,14 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancExtension_
     response.headers.SetHeader("Upgrade", "websocket");
     response.headers.SetHeader(
         "Sec-WebSocket-Accept",
-        Base64::EncodeToBase64(Sha1::Sha1(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
-                                          "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+        Base64::EncodeToBase64(Sha1::Sha1Bytes(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
+                                               "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
     response.headers.SetHeader("Sec-WebSocket-Extension", "");
     auto connection = std::make_shared<MockConnection>();
     ASSERT_TRUE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancProtocol__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancProtocol__Test) {
     Http::Server::Request request;
     Http::Client::Response response;
     ws.StartOpenAsClient(request);
@@ -283,20 +305,19 @@ TEST(WebSocketTests, WebSocketTests_FailCompleteOpenAsClientDueToBlancProtocol__
     response.headers.SetHeader("Upgrade", "websocket");
     response.headers.SetHeader(
         "Sec-WebSocket-Accept",
-        Base64::EncodeToBase64(Sha1::Sha1(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
-                                          "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+        Base64::EncodeToBase64(Sha1::Sha1Bytes(request.headers.GetHeaderValue("Sec-WebSocket-Key") +
+                                               "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
     response.headers.SetHeader("Sec-WebSocket-Protocol", "");
     auto connection = std::make_shared<MockConnection>();
     ASSERT_TRUE(ws.CompleteOpenAsClient(connection, response));
 }
 
-TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServer__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_CompleteOpenAsServer__Test) {
     Http::Server::Request request;
     request.headers.SetHeader("Sec-WebSocket-Version", "13");
     request.headers.SetHeader("Connection", "upgrade");
     request.headers.SetHeader("Upgrade", "websocket");
-    const std::string key = Base64::EncodeToBase64("abcdefghijklmnop");
+    const std::string key = "dGhlIHNhbXBsZSBub25jZQ==";
     request.headers.SetHeader("Sec-webSocket-key", key);
     Http::Client::Response response;
     auto connection = std::make_shared<MockConnection>();
@@ -316,14 +337,13 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServer__Test) {
     }
     EXPECT_TRUE(foundUpgradeToken);
     EXPECT_EQ(response.headers.GetHeaderValue("Sec-WebSocket-Accept"),
-              Base64::EncodeToBase64(Sha1::Sha1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+              "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
     ws.Ping("Hello");
     ASSERT_FALSE(connection->brokenByWebSocket);
     ASSERT_EQ("\x89\x05Hello", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServerWithTrailer__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_CompleteOpenAsServerWithTrailer__Test) {
     Http::Server::Request request;
     request.headers.SetHeader("Sec-WebSocket-Version", "13");
     request.headers.SetHeader("Connection", "upgrade");
@@ -343,8 +363,7 @@ TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServerWithTrailer__Test) {
               pongs);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPingNormaly__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPingNormaly__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Ping("Hello");
@@ -352,8 +371,7 @@ TEST(WebSocketTests, WebSocketTests_SendPingNormaly__Test) {
     ASSERT_EQ("\x89\x05Hello", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPingTooMuchData__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPingTooMuchData__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Ping(std::string(126, 'x'));
@@ -361,8 +379,7 @@ TEST(WebSocketTests, WebSocketTests_SendPingTooMuchData__Test) {
     ASSERT_EQ("", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPingMaxAllowedData__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPingMaxAllowedData__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Ping(std::string(125, 'x'));
@@ -370,8 +387,7 @@ TEST(WebSocketTests, WebSocketTests_SendPingMaxAllowedData__Test) {
     ASSERT_EQ("\x89\x7D" + std::string(125, 'x'), connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceivePing__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceivePing__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     std::vector<std::string> pings;
@@ -390,8 +406,7 @@ TEST(WebSocketTests, WebSocketTests_ReceivePing__Test) {
     }
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPongNormaly__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPongNormaly__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Pong("Hello");
@@ -399,8 +414,7 @@ TEST(WebSocketTests, WebSocketTests_SendPongNormaly__Test) {
     ASSERT_EQ("\x8A\x05Hello", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPongTooMuchData__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPongTooMuchData__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Pong(std::string(126, 'x'));
@@ -408,8 +422,7 @@ TEST(WebSocketTests, WebSocketTests_SendPongTooMuchData__Test) {
     ASSERT_EQ("", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendPongMaxAllowedData__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendPongMaxAllowedData__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.Pong(std::string(125, 'x'));
@@ -417,8 +430,7 @@ TEST(WebSocketTests, WebSocketTests_SendPongMaxAllowedData__Test) {
     ASSERT_EQ("\x8A\x7D" + std::string(125, 'x'), connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceivePong__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceivePong__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     std::vector<std::string> pongs;
@@ -432,8 +444,7 @@ TEST(WebSocketTests, WebSocketTests_ReceivePong__Test) {
               pongs);
 }
 
-TEST(WebSoketTests, WebSoketTests_SendText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendText__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.SendText("Hello, World!");
@@ -441,8 +452,7 @@ TEST(WebSoketTests, WebSoketTests_SendText__Test) {
     ASSERT_EQ("\x81\x0DHello, World!", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceiveText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceiveText__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     std::vector<std::string> text;
@@ -453,8 +463,7 @@ TEST(WebSocketTests, WebSocketTests_ReceiveText__Test) {
     ASSERT_EQ((std::vector<std::string>{"Hello, World!"}), text);
 }
 
-TEST(WebSoketTests, WebSoketTests_SendBinary__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendBinary__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.SendBinary("Hello, World!");
@@ -462,8 +471,7 @@ TEST(WebSoketTests, WebSoketTests_SendBinary__Test) {
     ASSERT_EQ("\x82\x0DHello, World!", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceiveBinary__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceiveBinary__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     std::vector<std::string> binary;
@@ -474,8 +482,7 @@ TEST(WebSocketTests, WebSocketTests_ReceiveBinary__Test) {
     ASSERT_EQ((std::vector<std::string>{"Hello, World!"}), binary);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendMasked__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendMasked__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     const std::string data = "Hello, World!";
@@ -489,8 +496,7 @@ TEST(WebSocketTests, WebSocketTests_SendMasked__Test) {
     }
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceiveMasked__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceiveMasked__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     std::vector<std::string> text;
@@ -506,8 +512,7 @@ TEST(WebSocketTests, WebSocketTests_ReceiveMasked__Test) {
     ASSERT_EQ((std::vector<std::string>{data}), text);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendFragmentedText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendFragmentedText__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.SendText("Hello,", false);
@@ -530,8 +535,7 @@ TEST(WebSocketTests, WebSocketTests_SendFragmentedText__Test) {
     ASSERT_EQ("\x80\x06World!", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_SendFragmentedBinary__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_SendFragmentedBinary__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     ws.SendBinary("Hello,", false);
@@ -554,8 +558,7 @@ TEST(WebSocketTests, WebSocketTests_SendFragmentedBinary__Test) {
     ASSERT_EQ("\x80\x06World!", connection->webSocketOutput);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceivedFragmentedText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceivedFragmentedText__Test) {
     auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Client);
     std::vector<std::string> text;
@@ -570,8 +573,7 @@ TEST(WebSocketTests, WebSocketTests_ReceivedFragmentedText__Test) {
     ASSERT_EQ((std::vector<std::string>{"Hello, World!"}), text);
 }
 
-TEST(WebSocketTests, WebSocketTests_InitiateCloseNoStatusReturned__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_InitiateCloseNoStatusReturned__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -597,8 +599,7 @@ TEST(WebSocketTests, WebSocketTests_InitiateCloseNoStatusReturned__Test) {
     EXPECT_EQ("", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_InitiateCloseStatusReturned__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_InitiateCloseStatusReturned__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -638,8 +639,7 @@ TEST(WebSocketTests, WebSocketTests_InitiateCloseStatusReturned__Test) {
     EXPECT_EQ("Bye", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_ReceiveCloseFrame__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ReceiveCloseFrame__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -659,16 +659,25 @@ TEST(WebSocketTests, WebSocketTests_ReceiveCloseFrame__Test) {
     ASSERT_TRUE(closeReceived);
     EXPECT_EQ(1005, codeReceived);
     EXPECT_EQ("", reasonReceived);
+    ASSERT_EQ((std::vector<std::string>{
+                  "WebSocket::WebSocket[1]: Connection to mock-client closed by peer",
+              }),
+              diagnosticMessages);
+    diagnosticMessages.clear();
     ws.Ping();
     ASSERT_EQ(std::string("\x89\x00", 2), connection->webSocketOutput);
     connection->webSocketOutput.clear();
     ws.Close(1000, "Goodbye!");
     ASSERT_EQ("\x88\x0A\x03\xe8Goodbye!", connection->webSocketOutput);
     ASSERT_TRUE(connection->brokenByWebSocket);
+    ASSERT_EQ((std::vector<std::string>{
+                  "WebSocket::WebSocket[1]: Connection to mock-client closed (Goodbye!)",
+              }),
+              diagnosticMessages);
+    diagnosticMessages.clear();
 }
 
-TEST(WebSocketTests, WebSocketTests_ViolationReservedBits__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ViolationReservedBits__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -691,8 +700,7 @@ TEST(WebSocketTests, WebSocketTests_ViolationReservedBits__Test) {
     EXPECT_EQ("reserved bits set", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_ViolationUnexpectedContinuation__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ViolationUnexpectedContinuation__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -715,8 +723,7 @@ TEST(WebSocketTests, WebSocketTests_ViolationUnexpectedContinuation__Test) {
     EXPECT_EQ("unexpected continuation frame", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_ViolationNewFrameDuringFragmentedFrame__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ViolationNewFrameDuringFragmentedFrame__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -742,8 +749,7 @@ TEST(WebSocketTests, WebSocketTests_ViolationNewFrameDuringFragmentedFrame__Test
     EXPECT_EQ("last message incomplete", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_ViolationUnknownOpcode__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_ViolationUnknownOpcode__Test) {
     const auto connection = std::make_shared<MockConnection>();
     ws.Open(connection, WebSocket::WebSocket::Role::Server);
     unsigned int codeReceived;
@@ -766,8 +772,7 @@ TEST(WebSocketTests, WebSocketTests_ViolationUnknownOpcode__Test) {
     EXPECT_EQ("unknown opcode", reasonReceived);
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerNotGetMethod) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerNotGetMethod) {
     Http::Server::Request request;
     request.method = "POST";
     request.headers.SetHeader("Connection", "upgrade");
@@ -780,8 +785,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerNotGetMethod) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerWrongUpgrade) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerWrongUpgrade) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -794,8 +798,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongUpgrade) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerMissUpgrade) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerMissUpgrade) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -807,8 +810,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissUpgrade) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerMissConnection) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerMissConnection) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Upgrade", "websocket");
@@ -820,8 +822,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissConnection) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerWrongConnection) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerWrongConnection) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "foobar");
@@ -834,8 +835,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongConnection) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerWrongVersion) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerWrongVersion) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -848,8 +848,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongVersion) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerMissingVersion) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerMissingVersion) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -861,8 +860,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissingVersion) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerWrongKey) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerWrongKey) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -875,8 +873,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerWrongKey) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, FailCompleteOpenAsServerMissingKey) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, FailCompleteOpenAsServerMissingKey) {
     Http::Server::Request request;
     request.method = "GET";
     request.headers.SetHeader("Connection", "upgrade");
@@ -887,8 +884,7 @@ TEST(WebSocketTests, FailCompleteOpenAsServerMissingKey) {
     ASSERT_FALSE(ws.OpenAsServer(connection, request, response, ""));
 }
 
-TEST(WebSocketTests, WebSocketTests_BadUtf8InText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_BadUtf8InText__Test) {
     const auto connection = std::make_shared<MockConnection>();
     Http::Server::Request request;
     Http::Client::Response response;
@@ -919,8 +915,7 @@ TEST(WebSocketTests, WebSocketTests_BadUtf8InText__Test) {
     EXPECT_EQ("text message with invalid UTF-8 encoding", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_Utf8InFragmentedText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_Utf8InFragmentedText__Test) {
     const auto connection = std::make_shared<MockConnection>();
     Http::Server::Request request;
     Http::Client::Response response;
@@ -937,8 +932,7 @@ TEST(WebSocketTests, WebSocketTests_Utf8InFragmentedText__Test) {
     ASSERT_EQ(std::vector<std::string>{"𣎴"}, text);
 }
 
-TEST(WebSocketTests, WebSocketTests_BadUtf8InFragmentedText__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_BadUtf8InFragmentedText__Test) {
     const auto connection = std::make_shared<MockConnection>();
     Http::Server::Request request;
     Http::Client::Response response;
@@ -955,8 +949,7 @@ TEST(WebSocketTests, WebSocketTests_BadUtf8InFragmentedText__Test) {
     ASSERT_EQ(std::vector<std::string>{}, text);
 }
 
-TEST(WebSocketTests, WebSocketTests_InvalidUtf8InReason__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_InvalidUtf8InReason__Test) {
     const auto connection = std::make_shared<MockConnection>();
     Http::Server::Request request;
     Http::Client::Response response;
@@ -987,8 +980,7 @@ TEST(WebSocketTests, WebSocketTests_InvalidUtf8InReason__Test) {
     EXPECT_EQ("invalid UTF-8 encoding in close reason", reasonReceived);
 }
 
-TEST(WebSocketTests, WebSocketTests_CompleteOpenAsServerTockenCapitalized__Test) {
-    WebSocket::WebSocket ws;
+TEST_F(WebSocketTests, WebSocketTests_CompleteOpenAsServerTockenCapitalized__Test) {
     Http::Server::Request request;
     request.headers.SetHeader("Sec-WebSocket-Version", "13");
     request.headers.SetHeader("Connection", "Upgrade");
