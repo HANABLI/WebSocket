@@ -540,9 +540,21 @@ namespace WebSocket
     void WebSocket::Open(std::shared_ptr<Http::Connection> connection, Role role) {
         impl_->connection = connection;
         impl_->role = role;
-        impl_->connection->SetDataReceivedDelegate([this](const std::vector<uint8_t>& data)
-                                                   { impl_->ReceiveData(data); });
-        impl_->connection->SetConnectionBrokenDelegate([this](bool) { impl_->ConnectionBroken(); });
+        std::weak_ptr<Impl> implWeak(impl_);
+        impl_->connection->SetDataReceivedDelegate(
+            [implWeak](const std::vector<uint8_t>& data)
+            {
+                const auto impl = implWeak.lock();
+                if (impl)
+                { impl->ReceiveData(data); }
+            });
+        impl_->connection->SetConnectionBrokenDelegate(
+            [implWeak](bool)
+            {
+                const auto impl = implWeak.lock();
+                if (impl)
+                { impl->ConnectionBroken(); }
+            });
     }
 
     bool WebSocket::OpenAsServer(std::shared_ptr<Http::Connection> connection,

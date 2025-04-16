@@ -253,7 +253,7 @@ namespace WebSocket
         /**
          *
          */
-        std::unique_ptr<Impl> impl_;
+        std::shared_ptr<Impl> impl_;
     };
 }  // namespace WebSocket
 
