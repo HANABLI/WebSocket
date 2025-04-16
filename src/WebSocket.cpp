@@ -107,7 +107,7 @@ namespace
      *      and Base64
      */
     std::string ComputeValidationKey(const std::string& key) {
-        return Base64::EncodeToBase64(Sha1::Sha1(key + WEBSOCKET_KEY_SALT));
+        return Base64::EncodeToBase64(Sha1::Sha1Bytes(key + WEBSOCKET_KEY_SALT));
     }
 }  // namespace
 namespace WebSocket
@@ -550,9 +550,9 @@ namespace WebSocket
         if (StringUtils::NormalizeCaseInsensitiveString(
                 request.headers.GetHeaderValue("Upgrade")) != "websocket")
         { return false; }
-        const auto key = request.headers.GetHeaderValue("sec-WebSocket-key");
+        impl_->key = request.headers.GetHeaderValue("sec-WebSocket-key");
 
-        if (Base64::DecodeFromBase64(key).length() != REQUEIRED_KEY_LENGTH)
+        if (Base64::DecodeFromBase64(impl_->key).length() != REQUEIRED_KEY_LENGTH)
         { return false; }
         auto connectionTockens = request.headers.GetHeaderMultiValues("connection");
         connectionTockens.push_back("upgrade");
@@ -560,7 +560,7 @@ namespace WebSocket
         response.status = "Switching Protocols";
         response.headers.SetHeader("Connection", connectionTockens, true);
         response.headers.SetHeader("Upgrade", "websocket");
-        response.headers.SetHeader("Sec-WebSocket-Accept", ComputeValidationKey(key));
+        response.headers.SetHeader("Sec-WebSocket-Accept", ComputeValidationKey(impl_->key));
         Open(connection, WebSocket::Role::Server);
         if (!trailer.empty())
         { impl_->ReceiveData(std::vector<uint8_t>(trailer.begin(), trailer.end())); }
